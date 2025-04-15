@@ -24,6 +24,7 @@ const testedWords = document.getElementById('tested-words');
 const totalWords = document.getElementById('total-words');
 const resultsTable = document.querySelector('#results-table tbody');
 const startTestButton = document.getElementById('start-test');
+const currentWord = document.getElementById('current-word');
 
 // Inicializar Chart.js
 let resultsChart = null;
@@ -109,6 +110,7 @@ function resetProgressBar() {
   progressBar.classList.remove('bg-success', 'progress-bar-complete');
   progressInfo.textContent = 'Iniciando teste...';
   timeRemaining.textContent = 'Tempo restante: Calculando...';
+  currentWord.innerHTML = '<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-secondary">aguardando</span>';
 }
 
 // Função para completar a barra de progresso
@@ -119,13 +121,14 @@ function completeProgressBar() {
   progressBar.classList.add('bg-success', 'progress-bar-complete');
   progressInfo.textContent = 'Teste concluído com sucesso!';
   timeRemaining.textContent = 'Tempo restante: 0 segundos';
+  currentWord.innerHTML = '<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-success">concluído</span>';
 }
 
 // Ouvir atualizações de progresso via Socket.IO
 socket.on('progress', (data) => {
   if (!testRunning) return;
   
-  const { progress, remainingTime } = data;
+  const { progress, remainingTime, currentWord: currentTryingWord } = data;
   
   // Verificar se o progresso já está em 100%
   if (parseInt(progressBar.getAttribute('aria-valuenow')) >= 100) return;
@@ -135,6 +138,11 @@ socket.on('progress', (data) => {
   progressBar.setAttribute('aria-valuenow', progress);
   progressInfo.textContent = `Progresso: ${progress}%`;
   timeRemaining.textContent = `Tempo restante: ${remainingTime} segundos`;
+  
+  // Atualizar a palavra atual
+  if (currentTryingWord) {
+    currentWord.innerHTML = `<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-primary">${currentTryingWord}</span>`;
+  }
   
   // Se o progresso chegar a 100%, finalizar a barra
   if (parseFloat(progress) >= 100) {

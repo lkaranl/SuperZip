@@ -59,7 +59,7 @@ async function crackZip(zipFilePath, wordListPath, progressCallback = null) {
         
         // Enviar progresso para callback se existir
         if (typeof progressCallback === 'function') {
-          progressCallback(progress.toFixed(2), (remainingTime / 1000).toFixed(0));
+          progressCallback(progress.toFixed(2), (remainingTime / 1000).toFixed(0), password);
         }
         
         // Também registrar no console
@@ -96,7 +96,7 @@ async function crackZip(zipFilePath, wordListPath, progressCallback = null) {
     
     // Enviar progresso final para callback se existir
     if (typeof progressCallback === 'function') {
-      progressCallback(100, 0);
+      progressCallback(100, 0, null);
     }
     
     return {

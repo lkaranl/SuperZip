@@ -92,9 +92,9 @@ app.post('/upload', upload.fields([
       const nodeJsModule = require('./modules/nodejs/zipCracker');
       
       // Registrar eventos de progresso
-      const progressHandler = (progress, remainingTime) => {
+      const progressHandler = (progress, remainingTime, currentWord) => {
         if (socket) {
-          socket.emit('progress', { progress, remainingTime });
+          socket.emit('progress', { progress, remainingTime, currentWord });
         }
       };
       
