@@ -5,6 +5,7 @@
 #include <chrono>
 #include <zip.h>
 #include <cstring>
+#include <thread>
 
 /**
  * Testa se uma senha funciona para um arquivo ZIP
@@ -99,18 +100,22 @@ void crackZip(const std::string& zipPath, const std::string& wordListPath) {
     while (std::getline(wordList, password) && !found) {
         testedWords++;
         
-        // Atualizar o progresso a cada segundo ou 1000 palavras
+        // Atualizar o progresso a cada 100ms ou 100 palavras
         auto currentTime = std::chrono::high_resolution_clock::now();
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastUpdateTime).count();
         
-        if (elapsedMs > 1000 || testedWords % 1000 == 0) {
+        if (elapsedMs > 100 || testedWords % 100 == 0) {
             double progress = (static_cast<double>(testedWords) / totalWords) * 100.0;
             auto totalElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
             double estimatedTotalTimeMs = (totalElapsedMs / progress) * 100.0;
             double remainingTimeMs = estimatedTotalTimeMs - totalElapsedMs;
             
             std::cerr << "Progresso: " << progress << "%, Tempo restante: " << (remainingTimeMs / 1000.0) << "s, Tentando: " << password << std::endl;
+            std::cerr.flush(); // Forçar a saída imediata
             lastUpdateTime = currentTime;
+            
+            // Pequena pausa para permitir que o sistema processe a saída
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         
         // Testar a senha atual
@@ -123,6 +128,10 @@ void crackZip(const std::string& zipPath, const std::string& wordListPath) {
     
     auto endTime = std::chrono::high_resolution_clock::now();
     auto executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    
+    // Enviar progresso final
+    std::cerr << "Progresso: 100%, Tempo restante: 0s, Tentando: " << password << std::endl;
+    std::cerr.flush();
     
     // Retornar o resultado em formato JSON
     if (found) {
@@ -137,6 +146,9 @@ int main(int argc, char* argv[]) {
         std::cerr << "Uso: " << argv[0] << " <arquivo_zip> <lista_palavras>" << std::endl;
         return 1;
     }
+    
+    // Desativar o buffer para stderr para garantir output em tempo real
+    std::cerr.setf(std::ios::unitbuf);
     
     crackZip(argv[1], argv[2]);
     return 0;

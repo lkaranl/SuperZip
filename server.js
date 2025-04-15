@@ -102,7 +102,12 @@ app.post('/upload', upload.fields([
     } else if (language === 'cpp') {
       // Implementar chamada para o módulo C++ (via wrapper)
       const cppModule = require('./modules/cpp/wrapper');
-      result = await cppModule.crackZip(zipFilePath, wordListPath);
+      const progressHandler = (progress, remainingTime, currentWord) => {
+        if (socket) {
+          socket.emit('progress', { progress, remainingTime, currentWord });
+        }
+      };
+      result = await cppModule.crackZip(zipFilePath, wordListPath, progressHandler);
     } else {
       result = { error: 'Linguagem não suportada' };
     }
