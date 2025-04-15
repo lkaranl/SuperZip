@@ -5,20 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SuperZip - Comparativo de Desempenho</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="container mt-5">
+    <div class="container mt-4">
         <div class="row justify-content-center">
             <div class="col-md-10">
-                <div class="card shadow">
+                <!-- Header -->
+                <div class="card shadow mb-4">
                     <div class="card-header bg-primary text-white">
-                        <h1 class="text-center mb-0">SuperZip</h1>
-                        <p class="text-center mb-0">Comparativo de Desempenho na Descoberta de Senhas em Arquivos ZIP</p>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-unlock-alt fa-2x me-2"></i>
+                            <div>
+                                <h1 class="mb-0">SuperZip</h1>
+                                <p class="mb-0">Comparativo de Desempenho na Descoberta de Senhas em Arquivos ZIP</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
+                </div>
+
+                <!-- Main Content -->
+                <div class="row">
+                    <!-- Left Column - Input Form -->
+                    <div class="col-md-5">
+                        <div class="card shadow h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Configuração do Teste</h5>
+                            </div>
+                            <div class="card-body">
                                 <form id="upload-form">
                                     <div class="mb-3">
                                         <label for="zipFile" class="form-label">Arquivo ZIP</label>
@@ -30,64 +45,129 @@
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Linguagem</label>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="language" id="nodejs" value="nodejs" checked>
-                                            <label class="form-check-label" for="nodejs">
-                                                Node.js
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="language" id="cpp" value="cpp">
-                                            <label class="form-check-label" for="cpp">
-                                                C++
-                                            </label>
+                                        <div class="d-flex">
+                                            <div class="form-check me-4">
+                                                <input class="form-check-input" type="radio" name="language" id="nodejs" value="nodejs" checked>
+                                                <label class="form-check-label" for="nodejs">
+                                                    <i class="fab fa-node-js text-success me-1"></i> Node.js
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="language" id="cpp" value="cpp">
+                                                <label class="form-check-label" for="cpp">
+                                                    <i class="fas fa-code text-primary me-1"></i> C++
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
-                                    <button type="submit" class="btn btn-primary w-100" id="start-test">Iniciar Teste</button>
+                                    <button type="submit" class="btn btn-primary w-100" id="start-test">
+                                        <i class="fas fa-play me-2"></i>Iniciar Teste
+                                    </button>
                                 </form>
                             </div>
-                            <div class="col-md-6">
-                                <div id="progress-container" class="d-none">
-                                    <h4>Progresso do Teste</h4>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Progress & Results -->
+                    <div class="col-md-7">
+                        <div class="card shadow h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Progresso e Resultados</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="progress-container" class="d-none mb-4">
+                                    <h5><i class="fas fa-spinner fa-spin me-2"></i>Progresso do Teste</h5>
                                     <div class="progress mb-3">
                                         <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                                     </div>
-                                    <p id="progress-info">Aguardando início do teste...</p>
-                                    <p id="time-remaining">Tempo restante: Calculando...</p>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p id="progress-info" class="mb-1">Aguardando início do teste...</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p id="time-remaining" class="mb-1">Tempo restante: Calculando...</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div id="result-container" class="d-none mt-4">
-                                    <h4>Resultado</h4>
+
+                                <div id="result-container" class="d-none">
+                                    <h5><i class="fas fa-clipboard-check me-2"></i>Resultado</h5>
+                                    
+                                    <div class="card mb-3 bg-light">
+                                        <div class="card-body">
+                                            <div class="row mb-2">
+                                                <div class="col-md-4 fw-bold">Arquivo ZIP:</div>
+                                                <div class="col-md-8" id="zip-file-name">-</div>
+                                            </div>
+                                            <div class="row mb-2">
+                                                <div class="col-md-4 fw-bold">Word List:</div>
+                                                <div class="col-md-8" id="wordlist-name">-</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
                                     <div class="alert alert-success" id="result-success">
-                                        <strong>Senha encontrada:</strong> <span id="password-found"></span>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-check-circle me-2 fs-4"></i>
+                                            <div>
+                                                <strong>Senha encontrada:</strong> <span id="password-found"></span>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="alert alert-danger d-none" id="result-failure">
-                                        <strong>Senha não encontrada!</strong>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-times-circle me-2 fs-4"></i>
+                                            <div>
+                                                <strong>Senha não encontrada!</strong>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p><strong>Tempo de execução:</strong> <span id="execution-time"></span> segundos</p>
-                                    <p><strong>Palavras testadas:</strong> <span id="tested-words"></span> de <span id="total-words"></span></p>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-4 mb-2">
+                                            <div class="card border-primary h-100">
+                                                <div class="card-body text-center">
+                                                    <h6 class="card-title text-primary">Tempo Total</h6>
+                                                    <p class="card-text fw-bold fs-4"><span id="execution-time">0</span> s</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8 mb-2">
+                                            <div class="card border-info h-100">
+                                                <div class="card-body text-center">
+                                                    <h6 class="card-title text-info">Palavras Verificadas</h6>
+                                                    <p class="card-text fw-bold fs-4"><span id="tested-words">0</span> de <span id="total-words">0</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
+                <!-- Results Table & Chart -->
                 <div class="card shadow mt-4">
                     <div class="card-header bg-primary text-white">
-                        <h2 class="mb-0">Resultados Anteriores</h2>
+                        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Histórico de Resultados</h5>
                     </div>
                     <div class="card-body">
                         <div class="mb-4">
-                            <h4>Comparativo de Desempenho</h4>
-                            <canvas id="resultsChart"></canvas>
+                            <h5 class="border-bottom pb-2"><i class="fas fa-chart-bar me-2"></i>Comparativo de Desempenho</h5>
+                            <div style="height: 350px;">
+                                <canvas id="resultsChart"></canvas>
+                            </div>
                         </div>
+                        <h5 class="border-bottom pb-2"><i class="fas fa-table me-2"></i>Tabela de Resultados</h5>
                         <div class="table-responsive">
-                            <table class="table table-striped" id="results-table">
-                                <thead>
+                            <table class="table table-striped table-hover" id="results-table">
+                                <thead class="table-primary">
                                     <tr>
                                         <th>Arquivo ZIP</th>
                                         <th>Word List</th>
                                         <th>Linguagem</th>
-                                        <th>Tempo (ms)</th>
+                                        <th>Tempo</th>
                                         <th>Resultado</th>
                                         <th>Data/Hora</th>
                                     </tr>
@@ -98,6 +178,11 @@
                             </table>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="mt-4 mb-2 text-center text-muted">
+                    <p><small>SuperZip - Comparativo de Desempenho &copy; <%= new Date().getFullYear() %></small></p>
                 </div>
             </div>
         </div>

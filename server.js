@@ -28,7 +28,9 @@ const storage = multer.diskStorage({
     cb(null, 'public/uploads/');
   },
   filename: function(req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
+    // Adicionar timestamp para evitar conflitos, mas manter o nome original
+    const uniqueSuffix = Date.now();
+    cb(null, uniqueSuffix + '-' + file.originalname);
   }
 });
 
@@ -42,7 +44,9 @@ const csvWriter = createObjectCsvWriter({
   path: 'results.csv',
   header: [
     { id: 'zipFile', title: 'Arquivo ZIP' },
+    { id: 'zipFileOriginal', title: 'Nome Original ZIP' },
     { id: 'wordList', title: 'Word List' },
+    { id: 'wordListOriginal', title: 'Nome Original Word List' },
     { id: 'language', title: 'Linguagem' },
     { id: 'executionTime', title: 'Tempo de Execução (ms)' },
     { id: 'result', title: 'Resultado' },
@@ -76,6 +80,10 @@ app.post('/upload', upload.fields([
     const socketId = req.body.socketId;
     const socket = io.sockets.sockets.get(socketId);
 
+    // Guardar os nomes originais
+    const zipFileOriginal = req.files.zipFile[0].originalname;
+    const wordListOriginal = req.files.wordList[0].originalname;
+
     // Aqui implementaremos a lógica de teste de acordo com a linguagem selecionada
     let result = {};
     
@@ -103,13 +111,19 @@ app.post('/upload', upload.fields([
     if (!result.error) {
       await csvWriter.writeRecords([{
         zipFile: path.basename(zipFilePath),
+        zipFileOriginal: zipFileOriginal,
         wordList: path.basename(wordListPath),
+        wordListOriginal: wordListOriginal,
         language: language,
         executionTime: result.executionTime,
         result: result.password || 'Não encontrado',
         timestamp: new Date().toISOString()
       }]);
     }
+
+    // Adicionar nomes originais ao resultado
+    result.zipFileOriginal = zipFileOriginal;
+    result.wordListOriginal = wordListOriginal;
 
     res.json(result);
   } catch (error) {

@@ -1,6 +1,7 @@
 // Conectar ao servidor via Socket.IO
 const socket = io();
 let socketId = null;
+let testRunning = false;
 
 // Obter o ID do socket
 socket.on('connect', () => {
@@ -31,18 +32,21 @@ let resultsChart = null;
 uploadForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   
+  // Evitar submissões múltiplas
+  if (testRunning) return;
+  
+  testRunning = true;
+  
   // Desabilitar o botão durante o teste
   startTestButton.disabled = true;
-  startTestButton.textContent = 'Testando...';
+  startTestButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testando...';
   
   // Mostrar o contêiner de progresso
   progressContainer.classList.remove('d-none');
   resultContainer.classList.add('d-none');
   
   // Resetar a barra de progresso
-  progressBar.style.width = '0%';
-  progressBar.setAttribute('aria-valuenow', 0);
-  progressInfo.textContent = 'Iniciando teste...';
+  resetProgressBar();
   
   // Obter o formulário e adicionar o socketId
   const formData = new FormData(uploadForm);
@@ -60,6 +64,11 @@ uploadForm.addEventListener('submit', async (e) => {
     }
     
     const result = await response.json();
+    
+    // Completar a barra de progresso
+    completeProgressBar();
+    
+    // Exibir o resultado
     displayTestResult(result);
     
     // Recarregar os resultados anteriores
@@ -67,26 +76,70 @@ uploadForm.addEventListener('submit', async (e) => {
     
     // Habilitar o botão novamente
     startTestButton.disabled = false;
-    startTestButton.textContent = 'Iniciar Teste';
+    startTestButton.innerHTML = '<i class="fas fa-play me-2"></i>Iniciar Teste';
+    
+    // Esconder o container de progresso após 1.5 segundos
+    setTimeout(() => {
+      if (!progressContainer.classList.contains('d-none')) {
+        progressContainer.classList.add('d-none');
+      }
+    }, 1500);
+    
   } catch (error) {
     console.error('Erro:', error);
     alert(`Ocorreu um erro: ${error.message}`);
     
+    // Resetar a barra de progresso em caso de erro
+    resetProgressBar();
+    progressContainer.classList.add('d-none');
+    
     // Habilitar o botão novamente
     startTestButton.disabled = false;
-    startTestButton.textContent = 'Iniciar Teste';
+    startTestButton.innerHTML = '<i class="fas fa-play me-2"></i>Iniciar Teste';
+  } finally {
+    testRunning = false;
   }
 });
 
+// Função para resetar a barra de progresso
+function resetProgressBar() {
+  progressBar.style.width = '0%';
+  progressBar.setAttribute('aria-valuenow', 0);
+  progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+  progressBar.classList.remove('bg-success', 'progress-bar-complete');
+  progressInfo.textContent = 'Iniciando teste...';
+  timeRemaining.textContent = 'Tempo restante: Calculando...';
+}
+
+// Função para completar a barra de progresso
+function completeProgressBar() {
+  progressBar.style.width = '100%';
+  progressBar.setAttribute('aria-valuenow', 100);
+  progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+  progressBar.classList.add('bg-success', 'progress-bar-complete');
+  progressInfo.textContent = 'Teste concluído com sucesso!';
+  timeRemaining.textContent = 'Tempo restante: 0 segundos';
+}
+
 // Ouvir atualizações de progresso via Socket.IO
 socket.on('progress', (data) => {
+  if (!testRunning) return;
+  
   const { progress, remainingTime } = data;
+  
+  // Verificar se o progresso já está em 100%
+  if (parseInt(progressBar.getAttribute('aria-valuenow')) >= 100) return;
   
   // Atualizar a barra de progresso
   progressBar.style.width = `${progress}%`;
   progressBar.setAttribute('aria-valuenow', progress);
   progressInfo.textContent = `Progresso: ${progress}%`;
   timeRemaining.textContent = `Tempo restante: ${remainingTime} segundos`;
+  
+  // Se o progresso chegar a 100%, finalizar a barra
+  if (parseFloat(progress) >= 100) {
+    completeProgressBar();
+  }
 });
 
 // Exibir o resultado do teste
@@ -109,6 +162,14 @@ function displayTestResult(result) {
   executionTime.textContent = (result.executionTime / 1000).toFixed(2);
   testedWords.textContent = result.testedWords ? result.testedWords.toLocaleString() : '0';
   totalWords.textContent = result.totalWords ? result.totalWords.toLocaleString() : '0';
+  
+  // Adicionar informações dos arquivos
+  if (result.zipFileOriginal) {
+    document.getElementById('zip-file-name').textContent = result.zipFileOriginal;
+  }
+  if (result.wordListOriginal) {
+    document.getElementById('wordlist-name').textContent = result.wordListOriginal;
+  }
 }
 
 // Carregar resultados anteriores
@@ -160,17 +221,20 @@ function displayResults(results) {
   // Limpar a tabela
   resultsTable.innerHTML = '';
   
-  // Preencher a tabela
+  // Preencher a tabela com nomes originais quando disponíveis
   results.forEach(result => {
+    const zipFileName = result['Nome Original ZIP'] || result['Arquivo ZIP'] || '-';
+    const wordListName = result['Nome Original Word List'] || result['Word List'] || '-';
+    
     const row = document.createElement('tr');
     
     row.innerHTML = `
-      <td>${result['Arquivo ZIP'] || '-'}</td>
-      <td>${result['Word List'] || '-'}</td>
+      <td>${zipFileName}</td>
+      <td>${wordListName}</td>
       <td>${result['Linguagem'] || '-'}</td>
-      <td>${result['Tempo de Execução (ms)'] || '-'}</td>
+      <td>${formatTime(result['Tempo de Execução (ms)'] || '0')}</td>
       <td>${result['Resultado'] || '-'}</td>
-      <td>${result['Data/Hora'] || '-'}</td>
+      <td>${formatDate(result['Data/Hora'] || '-')}</td>
     `;
     
     resultsTable.appendChild(row);
@@ -178,6 +242,24 @@ function displayResults(results) {
   
   // Criar dados para o gráfico
   createResultsChart(results);
+}
+
+// Formatar tempo para exibição
+function formatTime(timeMs) {
+  const time = parseFloat(timeMs);
+  if (isNaN(time)) return '-';
+  if (time < 1000) return `${time} ms`;
+  return `${(time / 1000).toFixed(2)} s`;
+}
+
+// Formatar data para exibição
+function formatDate(dateString) {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleString('pt-BR');
+  } catch (e) {
+    return dateString;
+  }
 }
 
 // Criar um gráfico comparativo
@@ -191,11 +273,19 @@ function createResultsChart(results) {
   const languageLabels = [...new Set(results.map(r => r['Linguagem']))];
   const datasets = [];
   
-  // Agrupar por arquivo ZIP e word list
-  const uniqueFiles = [...new Set(results.map(r => `${r['Arquivo ZIP']} / ${r['Word List']}`))];
+  // Agrupar por arquivo ZIP e word list (usar nomes originais quando disponíveis)
+  const uniqueFiles = [...new Set(results.map(r => {
+    const zipName = r['Nome Original ZIP'] || r['Arquivo ZIP'] || 'Desconhecido';
+    const wordlistName = r['Nome Original Word List'] || r['Word List'] || 'Desconhecido';
+    return `${zipName} / ${wordlistName}`;
+  }))];
   
   uniqueFiles.forEach((fileCombo, index) => {
-    const fileData = results.filter(r => `${r['Arquivo ZIP']} / ${r['Word List']}` === fileCombo);
+    const fileData = results.filter(r => {
+      const zipName = r['Nome Original ZIP'] || r['Arquivo ZIP'] || 'Desconhecido';
+      const wordlistName = r['Nome Original Word List'] || r['Word List'] || 'Desconhecido';
+      return `${zipName} / ${wordlistName}` === fileCombo;
+    });
     
     const dataset = {
       label: fileCombo,
@@ -221,6 +311,7 @@ function createResultsChart(results) {
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       scales: {
         y: {
           beginAtZero: true,
@@ -239,10 +330,25 @@ function createResultsChart(results) {
       plugins: {
         title: {
           display: true,
-          text: 'Comparativo de Desempenho por Linguagem'
+          text: 'Comparativo de Desempenho por Linguagem',
+          font: {
+            size: 16,
+            weight: 'bold'
+          }
         },
         legend: {
-          position: 'bottom'
+          position: 'bottom',
+          labels: {
+            boxWidth: 15,
+            padding: 15
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${context.raw.toFixed(2)} segundos`;
+            }
+          }
         }
       }
     }
@@ -257,7 +363,11 @@ function getRandomColor(index) {
     'rgba(54, 162, 235, 0.7)',
     'rgba(255, 206, 86, 0.7)',
     'rgba(153, 102, 255, 0.7)',
-    'rgba(255, 159, 64, 0.7)'
+    'rgba(255, 159, 64, 0.7)',
+    'rgba(29, 209, 161, 0.7)',
+    'rgba(238, 90, 36, 0.7)',
+    'rgba(106, 137, 204, 0.7)',
+    'rgba(196, 69, 105, 0.7)'
   ];
   
   return predefinedColors[index % predefinedColors.length];
