@@ -84,30 +84,28 @@ app.post('/upload', upload.fields([
     const zipFileOriginal = req.files.zipFile[0].originalname;
     const wordListOriginal = req.files.wordList[0].originalname;
 
+    // Registrar eventos de progresso
+    const progressHandler = (progress, remainingTime, currentWord) => {
+      if (socket) {
+        socket.emit('progress', { progress, remainingTime, currentWord });
+      }
+    };
+
     // Aqui implementaremos a lógica de teste de acordo com a linguagem selecionada
     let result = {};
     
     if (language === 'nodejs') {
       // Implementar chamada para o módulo Node.js
       const nodeJsModule = require('./modules/nodejs/zipCracker');
-      
-      // Registrar eventos de progresso
-      const progressHandler = (progress, remainingTime, currentWord) => {
-        if (socket) {
-          socket.emit('progress', { progress, remainingTime, currentWord });
-        }
-      };
-      
       result = await nodeJsModule.crackZip(zipFilePath, wordListPath, progressHandler);
     } else if (language === 'cpp') {
       // Implementar chamada para o módulo C++ (via wrapper)
       const cppModule = require('./modules/cpp/wrapper');
-      const progressHandler = (progress, remainingTime, currentWord) => {
-        if (socket) {
-          socket.emit('progress', { progress, remainingTime, currentWord });
-        }
-      };
       result = await cppModule.crackZip(zipFilePath, wordListPath, progressHandler);
+    } else if (language === 'python') {
+      // Implementar chamada para o módulo Python (via wrapper)
+      const pythonModule = require('./modules/python/wrapper');
+      result = await pythonModule.crackZip(zipFilePath, wordListPath, progressHandler);
     } else {
       result = { error: 'Linguagem não suportada' };
     }

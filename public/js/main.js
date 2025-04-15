@@ -226,29 +226,44 @@ function parseCSV(csvData) {
 
 // Exibir os resultados na tabela e no gráfico
 function displayResults(results) {
-  // Limpar a tabela
+  // Limpar a tabela antes de adicionar novos resultados
   resultsTable.innerHTML = '';
   
-  // Preencher a tabela com nomes originais quando disponíveis
+  // Adicionar cada resultado à tabela
   results.forEach(result => {
-    const zipFileName = result['Nome Original ZIP'] || result['Arquivo ZIP'] || '-';
-    const wordListName = result['Nome Original Word List'] || result['Word List'] || '-';
-    
     const row = document.createElement('tr');
     
+    // Formatando os dados para exibição
+    const zipFile = result['Arquivo ZIP'];
+    const wordList = result['Word List'];
+    const language = result['Linguagem'];
+    const executionTime = formatTime(parseFloat(result['Tempo de Execução (ms)']));
+    const passwordResult = result['Resultado'];
+    const timestamp = formatDate(result['Data/Hora']);
+    
+    // Definir classes de acordo com o resultado
+    let resultClass = 'text-success';
+    let resultIcon = '<i class="fas fa-check-circle"></i>';
+    
+    if (passwordResult === 'Não encontrado') {
+      resultClass = 'text-danger';
+      resultIcon = '<i class="fas fa-times-circle"></i>';
+    }
+    
+    // Construir o HTML da linha
     row.innerHTML = `
-      <td>${zipFileName}</td>
-      <td>${wordListName}</td>
-      <td>${result['Linguagem'] || '-'}</td>
-      <td>${formatTime(result['Tempo de Execução (ms)'] || '0')}</td>
-      <td>${result['Resultado'] || '-'}</td>
-      <td>${formatDate(result['Data/Hora'] || '-')}</td>
+      <td>${zipFile}</td>
+      <td>${wordList}</td>
+      <td>${getLanguageIcon(language)} ${language}</td>
+      <td>${executionTime}</td>
+      <td class="${resultClass}">${resultIcon} ${passwordResult}</td>
+      <td>${timestamp}</td>
     `;
     
     resultsTable.appendChild(row);
   });
   
-  // Criar dados para o gráfico
+  // Criar ou atualizar o gráfico
   createResultsChart(results);
 }
 
@@ -272,95 +287,93 @@ function formatDate(dateString) {
 
 // Criar um gráfico comparativo
 function createResultsChart(results) {
-  // Destruir o gráfico anterior se existir
-  if (resultsChart) {
-    resultsChart.destroy();
+  // Se não houver resultados ou menos de 2, não criar o gráfico
+  if (!results || results.length < 1) {
+    return;
   }
   
   // Preparar dados para o gráfico
-  const languageLabels = [...new Set(results.map(r => r['Linguagem']))];
   const datasets = [];
+  const languages = [...new Set(results.map(r => r['Linguagem']))];
   
-  // Agrupar por arquivo ZIP e word list (usar nomes originais quando disponíveis)
-  const uniqueFiles = [...new Set(results.map(r => {
-    const zipName = r['Nome Original ZIP'] || r['Arquivo ZIP'] || 'Desconhecido';
-    const wordlistName = r['Nome Original Word List'] || r['Word List'] || 'Desconhecido';
-    return `${zipName} / ${wordlistName}`;
-  }))];
-  
-  uniqueFiles.forEach((fileCombo, index) => {
-    const fileData = results.filter(r => {
-      const zipName = r['Nome Original ZIP'] || r['Arquivo ZIP'] || 'Desconhecido';
-      const wordlistName = r['Nome Original Word List'] || r['Word List'] || 'Desconhecido';
-      return `${zipName} / ${wordlistName}` === fileCombo;
-    });
+  // Criar um dataset para cada linguagem
+  languages.forEach((language, index) => {
+    const languageResults = results.filter(r => r['Linguagem'] === language);
     
-    const dataset = {
-      label: fileCombo,
-      data: languageLabels.map(lang => {
-        const match = fileData.find(r => r['Linguagem'] === lang);
-        return match ? parseInt(match['Tempo de Execução (ms)']) / 1000 : 0;
-      }),
-      backgroundColor: getRandomColor(index),
-      borderColor: getRandomColor(index),
-      borderWidth: 1
-    };
+    // Filtrar apenas resultados com senhas encontradas
+    const successfulResults = languageResults.filter(r => r['Resultado'] !== 'Não encontrado');
     
-    datasets.push(dataset);
+    if (successfulResults.length > 0) {
+      datasets.push({
+        label: language,
+        data: successfulResults.map(r => ({
+          x: r['Word List'],
+          y: parseFloat(r['Tempo de Execução (ms)']) / 1000, // Converter para segundos
+          r: 8 + Math.min(12, successfulResults.length) // Tamanho do ponto proporcional ao número de resultados
+        })),
+        backgroundColor: getLanguageColor(language),
+        borderColor: getLanguageColor(language),
+        borderWidth: 2
+      });
+    }
   });
   
-  // Criar o gráfico
-  const ctx = document.getElementById('resultsChart').getContext('2d');
-  resultsChart = new Chart(ctx, {
-    type: 'bar',
+  // Se não houver dados para exibir, não criar o gráfico
+  if (datasets.length === 0) {
+    return;
+  }
+  
+  // Configuração do gráfico
+  const chartConfig = {
+    type: 'bubble',
     data: {
-      labels: languageLabels,
       datasets: datasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Tempo de execução (segundos)'
-          }
-        },
         x: {
           title: {
             display: true,
-            text: 'Linguagem'
+            text: 'Lista de Palavras'
           }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Tempo (segundos)'
+          },
+          beginAtZero: true
         }
       },
       plugins: {
-        title: {
-          display: true,
-          text: 'Comparativo de Desempenho por Linguagem',
-          font: {
-            size: 16,
-            weight: 'bold'
-          }
-        },
-        legend: {
-          position: 'bottom',
-          labels: {
-            boxWidth: 15,
-            padding: 15
-          }
-        },
         tooltip: {
           callbacks: {
             label: function(context) {
-              return `${context.dataset.label}: ${context.raw.toFixed(2)} segundos`;
+              return `${context.dataset.label}: ${context.raw.y.toFixed(2)} segundos`;
             }
           }
+        },
+        legend: {
+          position: 'top'
+        },
+        title: {
+          display: true,
+          text: 'Comparativo de Desempenho por Linguagem'
         }
       }
     }
-  });
+  };
+  
+  // Destruir o gráfico anterior se existir
+  if (resultsChart) {
+    resultsChart.destroy();
+  }
+  
+  // Criar o novo gráfico
+  const ctx = document.getElementById('resultsChart').getContext('2d');
+  resultsChart = new Chart(ctx, chartConfig);
 }
 
 // Gerar uma cor aleatória
@@ -379,6 +392,34 @@ function getRandomColor(index) {
   ];
   
   return predefinedColors[index % predefinedColors.length];
+}
+
+// Função para obter a cor da linguagem para o gráfico
+function getLanguageColor(language) {
+  switch (language.toLowerCase()) {
+    case 'nodejs':
+      return '#68A063'; // Verde do Node.js
+    case 'cpp':
+      return '#00599C'; // Azul do C++
+    case 'python':
+      return '#3776AB'; // Azul do Python
+    default:
+      return getRandomColor(0);
+  }
+}
+
+// Função para obter o ícone da linguagem
+function getLanguageIcon(language) {
+  switch (language.toLowerCase()) {
+    case 'nodejs':
+      return '<i class="fab fa-node-js text-success"></i>';
+    case 'cpp':
+      return '<i class="fas fa-code text-primary"></i>';
+    case 'python':
+      return '<i class="fab fa-python text-info"></i>';
+    default:
+      return '<i class="fas fa-code"></i>';
+  }
 }
 
 // Carregar resultados anteriores ao iniciar
