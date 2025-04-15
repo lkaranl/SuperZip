@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperZip - Comparativo de Desempenho</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h1 class="text-center mb-0">SuperZip</h1>
+                        <p class="text-center mb-0">Comparativo de Desempenho na Descoberta de Senhas em Arquivos ZIP</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <form id="upload-form">
+                                    <div class="mb-3">
+                                        <label for="zipFile" class="form-label">Arquivo ZIP</label>
+                                        <input type="file" class="form-control" id="zipFile" name="zipFile" accept=".zip" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="wordList" class="form-label">Lista de Palavras (Word List)</label>
+                                        <input type="file" class="form-control" id="wordList" name="wordList" accept=".txt" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Linguagem</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="language" id="nodejs" value="nodejs" checked>
+                                            <label class="form-check-label" for="nodejs">
+                                                Node.js
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="language" id="cpp" value="cpp">
+                                            <label class="form-check-label" for="cpp">
+                                                C++
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100" id="start-test">Iniciar Teste</button>
+                                </form>
+                            </div>
+                            <div class="col-md-6">
+                                <div id="progress-container" class="d-none">
+                                    <h4>Progresso do Teste</h4>
+                                    <div class="progress mb-3">
+                                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <p id="progress-info">Aguardando início do teste...</p>
+                                    <p id="time-remaining">Tempo restante: Calculando...</p>
+                                </div>
+                                <div id="result-container" class="d-none mt-4">
+                                    <h4>Resultado</h4>
+                                    <div class="alert alert-success" id="result-success">
+                                        <strong>Senha encontrada:</strong> <span id="password-found"></span>
+                                    </div>
+                                    <div class="alert alert-danger d-none" id="result-failure">
+                                        <strong>Senha não encontrada!</strong>
+                                    </div>
+                                    <p><strong>Tempo de execução:</strong> <span id="execution-time"></span> segundos</p>
+                                    <p><strong>Palavras testadas:</strong> <span id="tested-words"></span> de <span id="total-words"></span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card shadow mt-4">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0">Resultados Anteriores</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <h4>Comparativo de Desempenho</h4>
+                            <canvas id="resultsChart"></canvas>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="results-table">
+                                <thead>
+                                    <tr>
+                                        <th>Arquivo ZIP</th>
+                                        <th>Word List</th>
+                                        <th>Linguagem</th>
+                                        <th>Tempo (ms)</th>
+                                        <th>Resultado</th>
+                                        <th>Data/Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Os resultados serão inseridos aqui -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/main.js"></script>
+</body>
+</html> 
