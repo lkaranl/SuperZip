@@ -5,7 +5,19 @@ import json
 import zipfile
 import subprocess
 import os
+import threading
+import queue
+import multiprocessing
 from datetime import datetime
+
+# Global variables
+found_password = None
+found_lock = threading.Lock()
+stop_threads = threading.Event()
+tested_words_counter = 0
+counter_lock = threading.Lock()
+active_threads = 0
+threads_lock = threading.Lock()
 
 def test_7z_password(zip_path, password):
     """
@@ -164,12 +176,68 @@ def count_lines(file_path):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             return sum(1 for _ in f)
     except Exception as e:
-        print(f"Erro ao contar linhas: {e}", file=sys.stderr)
+        print(f"ERRO ao contar linhas: {str(e)}", file=sys.stderr)
         return 0
+
+def password_test_worker(zip_path, password_queue, progress_callback=None):
+    """
+    Worker thread para testar senhas
+    
+    Args:
+        zip_path (str): Caminho para o arquivo ZIP
+        password_queue (Queue): Fila de senhas para testar
+        progress_callback (callable): Função de callback para atualizar o progresso
+    """
+    global found_password, tested_words_counter, active_threads
+    
+    # Incrementar contador de threads ativas
+    with threads_lock:
+        active_threads += 1
+        current_active = active_threads
+    
+    print(f"INFO: Thread iniciada. Total de threads ativas: {current_active}", file=sys.stderr)
+    
+    try:
+        while not stop_threads.is_set():
+            try:
+                # Pegar próxima senha da fila (timeout para verificar o sinal de parada)
+                password = password_queue.get(timeout=0.1)
+                
+                # Incrementar contador de palavras testadas
+                with counter_lock:
+                    tested_words_counter += 1
+                
+                # Se já encontrou a senha, não precisa testar mais
+                if found_password is not None:
+                    password_queue.task_done()
+                    continue
+                
+                # Testar senha
+                if test_zip_password(zip_path, password):
+                    # Encontrou a senha, marcar e parar as threads
+                    with found_lock:
+                        if found_password is None:  # Evitar sobrescrever se outra thread já encontrou
+                            found_password = password
+                            print(f"SUCESSO: Thread encontrou a senha: '{password}'", file=sys.stderr)
+                            stop_threads.set()
+                
+                password_queue.task_done()
+                
+            except queue.Empty:
+                # Fila vazia, verificar se é para parar
+                if stop_threads.is_set():
+                    break
+    finally:
+        # Decrementar contador de threads ativas
+        with threads_lock:
+            active_threads -= 1
+            current_active = active_threads
+        
+        print(f"INFO: Thread finalizada. Total de threads ativas: {current_active}", file=sys.stderr)
 
 def crack_zip(zip_path, wordlist_path):
     """
-    Tenta quebrar a senha de um arquivo ZIP usando ataque de dicionário
+    Tenta quebrar a senha de um arquivo ZIP usando ataque de dicionário com múltiplas threads
     
     Args:
         zip_path (str): Caminho para o arquivo ZIP
@@ -178,9 +246,15 @@ def crack_zip(zip_path, wordlist_path):
     Returns:
         dict: Resultado do teste com tempo de execução e senha (se encontrada)
     """
+    global found_password, tested_words_counter, active_threads
+    
+    # Resetar variáveis globais
+    found_password = None
+    stop_threads.clear()
+    tested_words_counter = 0
+    active_threads = 0
+    
     start_time = time.time()
-    password_found = None
-    found = False
     
     print(f"INFO: Iniciando quebra de senha para {zip_path} usando lista {wordlist_path}", file=sys.stderr)
     print(f"INFO: Verificando arquivo ZIP...", file=sys.stderr)
@@ -198,7 +272,8 @@ def crack_zip(zip_path, wordlist_path):
             "error": f"Erro ao verificar arquivo ZIP: {str(e)}",
             "executionTime": int((time.time() - start_time) * 1000),
             "testedWords": 0,
-            "totalWords": 0
+            "totalWords": 0,
+            "threadsUsed": 0
         }
     
     # Contar o número total de palavras
@@ -206,94 +281,189 @@ def crack_zip(zip_path, wordlist_path):
     total_words = count_lines(wordlist_path)
     print(f"INFO: Total de {total_words} palavras na lista", file=sys.stderr)
     
-    tested_words = 0
+    # Determinar número de threads - limitando para evitar sobrecarga
+    num_cores = multiprocessing.cpu_count()
+    # Limitar a um número razoável de threads para evitar travamentos (2 por core é geralmente o ideal)
+    num_threads = max(2, min(num_cores * 2, 16))  # Mínimo 2, máximo 16 threads
+    print(f"INFO: Usando {num_threads} threads para processamento paralelo", file=sys.stderr)
+    
+    # Criar fila de senhas com tamanho limitado para evitar consumo excessivo de memória
+    password_queue = queue.Queue(maxsize=5000)
+    
+    # Iniciar threads worker
+    workers = []
+    for i in range(num_threads):
+        worker = threading.Thread(
+            target=password_test_worker,
+            args=(zip_path, password_queue),
+            daemon=True
+        )
+        worker.start()
+        workers.append(worker)
+    
+    # Variáveis para controle de progresso
     last_update_time = start_time
+    batch_size = 100  # Processar palavras em lotes para melhor performance
+    heartbeat_time = time.time()  # Para detecção de travamentos
     
-    # Lista de codificações para tentar
-    encodings = ['utf-8', 'latin1', 'cp1252', 'ascii']
-    
-    for encoding in encodings:
-        if found:
-            break
-            
-        try:
-            # Abrir a lista de palavras com a codificação atual
-            print(f"INFO: Testando com codificação {encoding}...", file=sys.stderr)
-            with open(wordlist_path, 'r', encoding=encoding, errors='ignore') as wordlist:
-                # Para cada palavra na lista
-                for line in wordlist:
-                    tested_words += 1
-                    password = line.strip()
-                    
-                    # Ignorar linhas vazias
-                    if not password:
-                        continue
-                    
-                    # Atualizar o progresso a cada 100ms ou 100 palavras
-                    current_time = time.time()
-                    elapsed_time = current_time - last_update_time
-                    
-                    if elapsed_time > 0.1 or tested_words % 100 == 0:
-                        progress = (tested_words / total_words) * 100
-                        total_elapsed_time = current_time - start_time
-                        
-                        # Evitar divisão por zero
-                        if progress > 0:
-                            estimated_total_time = (total_elapsed_time / progress) * 100
-                            remaining_time = estimated_total_time - total_elapsed_time
-                        else:
-                            remaining_time = 0
-                        
-                        print(f"Progresso: {progress:.2f}%, Tempo restante: {remaining_time:.2f}s, Tentando: {password}", 
-                              file=sys.stderr, flush=True)
-                        last_update_time = current_time
-                    
-                    # Testar a senha atual
-                    if test_zip_password(zip_path, password):
-                        password_found = password
-                        found = True
-                        print(f"SUCESSO: Senha encontrada: '{password}' com codificação {encoding}", file=sys.stderr)
-                        break
-            
-            if not found and encoding == encodings[-1]:
-                print(f"INFO: Senha não encontrada após testar {tested_words} palavras com todas as codificações", file=sys.stderr)
+    try:
+        # Lista de codificações para tentar
+        encodings = ['utf-8', 'latin1', 'cp1252', 'ascii']
+        
+        for encoding_idx, encoding in enumerate(encodings):
+            if found_password is not None or stop_threads.is_set():
+                break
                 
-        except UnicodeDecodeError:
-            print(f"AVISO: Erro de decodificação com {encoding}, tentando próxima codificação", file=sys.stderr)
-            continue
-        except Exception as e:
-            print(f"ERRO ao processar lista de palavras com {encoding}: {str(e)}", file=sys.stderr)
-            if encoding == encodings[-1]:  # Se for a última codificação
-                return {
-                    "success": False,
-                    "error": str(e),
-                    "executionTime": int((time.time() - start_time) * 1000),
-                    "testedWords": tested_words,
-                    "totalWords": total_words
-                }
+            try:
+                # Abrir a lista de palavras com a codificação atual
+                print(f"INFO: Lendo lista com codificação {encoding}...", file=sys.stderr)
+                
+                # Processar o arquivo em lotes para evitar sobrecarregar a memória
+                with open(wordlist_path, 'r', encoding=encoding, errors='ignore') as wordlist:
+                    current_batch = []
+                    
+                    for line in wordlist:
+                        if found_password is not None or stop_threads.is_set():
+                            break
+                            
+                        password = line.strip()
+                        
+                        # Ignorar linhas vazias
+                        if not password:
+                            continue
+                        
+                        current_batch.append(password)
+                        
+                        # Processar o lote quando atingir o tamanho definido
+                        if len(current_batch) >= batch_size:
+                            # Adicionar lote à fila
+                            for pwd in current_batch:
+                                # Verificar se a fila está quase cheia (90%) e aguardar se estiver
+                                while password_queue.qsize() > password_queue.maxsize * 0.9:
+                                    time.sleep(0.01)  # Pequena pausa para dar tempo às threads de consumir a fila
+                                    
+                                    # Verificar heartbeat a cada 5 segundos
+                                    current_time = time.time()
+                                    if current_time - heartbeat_time > 5:
+                                        heartbeat_time = current_time
+                                        print(f"HEARTBEAT: Fila com {password_queue.qsize()} senhas, {active_threads} threads ativas", 
+                                              file=sys.stderr, flush=True)
+                                    
+                                    # Sair se a senha foi encontrada ou se as threads foram paradas
+                                    if found_password is not None or stop_threads.is_set():
+                                        break
+                                
+                                # Adicionar senha à fila se não encontrou ainda
+                                if found_password is None and not stop_threads.is_set():
+                                    password_queue.put(pwd)
+                            
+                            # Limpar lote
+                            current_batch = []
+                        
+                        # Atualizar o progresso a cada 100ms
+                        current_time = time.time()
+                        elapsed_time = current_time - last_update_time
+                        
+                        if elapsed_time > 0.1:
+                            progress = (tested_words_counter / total_words) * 100 if total_words > 0 else 0
+                            total_elapsed_time = current_time - start_time
+                            
+                            # Evitar divisão por zero
+                            if progress > 0:
+                                estimated_total_time = (total_elapsed_time / progress) * 100
+                                remaining_time = estimated_total_time - total_elapsed_time
+                            else:
+                                remaining_time = 0
+                            
+                            # Enviar progresso para stderr
+                            print(f"Progresso: {progress:.2f}%, Tempo restante: {remaining_time:.2f}s, Testadas: {tested_words_counter}, Threads: {active_threads}, Tentando: {password}", 
+                                  file=sys.stderr, flush=True)
+                            last_update_time = current_time
+                    
+                    # Processar o lote restante, se houver
+                    if current_batch and found_password is None and not stop_threads.is_set():
+                        for pwd in current_batch:
+                            # Verificar se a fila está quase cheia (90%) e aguardar se estiver
+                            while password_queue.qsize() > password_queue.maxsize * 0.9:
+                                time.sleep(0.01)
+                                if found_password is not None or stop_threads.is_set():
+                                    break
+                                    
+                            # Adicionar senha à fila se não encontrou ainda
+                            if found_password is None and not stop_threads.is_set():
+                                password_queue.put(pwd)
+                
+                # Esperar todas as senhas serem processadas se não encontrou ainda
+                if found_password is None and not stop_threads.is_set() and encoding_idx == len(encodings) - 1:
+                    print(f"INFO: Aguardando threads finalizarem o processamento...", file=sys.stderr)
+                    
+                    # Aguardar a fila estar vazia ou uma senha ser encontrada
+                    while not password_queue.empty() and found_password is None and not stop_threads.is_set():
+                        time.sleep(0.1)
+                        
+                        # Verificar se houve progresso
+                        current_time = time.time()
+                        if current_time - heartbeat_time > 5:
+                            heartbeat_time = current_time
+                            print(f"HEARTBEAT: Fila com {password_queue.qsize()} senhas, {active_threads} threads ativas, {tested_words_counter} testadas", 
+                                  file=sys.stderr, flush=True)
+                    
+            except UnicodeDecodeError:
+                print(f"AVISO: Erro de decodificação com {encoding}, tentando próxima codificação", file=sys.stderr)
+                continue
+            except Exception as e:
+                print(f"ERRO ao processar lista de palavras com {encoding}: {str(e)}", file=sys.stderr)
+                if encoding == encodings[-1] and found_password is None:
+                    stop_threads.set()
+                    return {
+                        "success": False,
+                        "error": str(e),
+                        "executionTime": int((time.time() - start_time) * 1000),
+                        "testedWords": tested_words_counter,
+                        "totalWords": total_words,
+                        "threadsUsed": num_threads
+                    }
+    finally:
+        # Garantir que as threads sejam paradas
+        stop_threads.set()
+        
+        # Esvaziar a fila para liberar threads bloqueadas
+        while not password_queue.empty():
+            try:
+                password_queue.get_nowait()
+                password_queue.task_done()
+            except:
+                pass
+    
+    # Aguardar todas as threads finalizarem com timeout
+    for worker in workers:
+        worker.join(timeout=1.0)
     
     end_time = time.time()
     execution_time = int((end_time - start_time) * 1000)
     
     # Enviar progresso final
-    print(f"Progresso: 100%, Tempo restante: 0s, Tentando: {password}", file=sys.stderr, flush=True)
+    print(f"Progresso: 100%, Tempo restante: 0s, Testadas: {tested_words_counter}, Threads: {active_threads}, Senha: {found_password or 'Não encontrada'}", 
+          file=sys.stderr, flush=True)
     
     # Retornar o resultado
-    if found:
+    if found_password:
         result = {
             "success": True,
-            "password": password_found,
+            "password": found_password,
             "executionTime": execution_time,
-            "testedWords": tested_words,
-            "totalWords": total_words
+            "testedWords": tested_words_counter,
+            "totalWords": total_words,
+            "threadsUsed": num_threads
         }
     else:
         result = {
             "success": False,
             "password": None,
             "executionTime": execution_time,
-            "testedWords": tested_words,
-            "totalWords": total_words
+            "testedWords": tested_words_counter,
+            "totalWords": total_words,
+            "threadsUsed": num_threads
         }
     
     return result

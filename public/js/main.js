@@ -25,6 +25,7 @@ const totalWords = document.getElementById('total-words');
 const resultsTable = document.querySelector('#results-table tbody');
 const startTestButton = document.getElementById('start-test');
 const currentWord = document.getElementById('current-word');
+const threadCount = document.getElementById('thread-count');
 
 // Inicializar Chart.js
 let resultsChart = null;
@@ -111,6 +112,7 @@ function resetProgressBar() {
   progressInfo.textContent = 'Iniciando teste...';
   timeRemaining.textContent = 'Tempo restante: Calculando...';
   currentWord.innerHTML = '<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-secondary">aguardando</span>';
+  threadCount.innerHTML = '<i class="fas fa-microchip me-1"></i>Threads em uso: <span class="badge bg-secondary">0</span>';
 }
 
 // Função para completar a barra de progresso
@@ -122,13 +124,14 @@ function completeProgressBar() {
   progressInfo.textContent = 'Teste concluído com sucesso!';
   timeRemaining.textContent = 'Tempo restante: 0 segundos';
   currentWord.innerHTML = '<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-success">concluído</span>';
+  threadCount.innerHTML = '<i class="fas fa-microchip me-1"></i>Threads em uso: <span class="badge bg-success">finalizado</span>';
 }
 
 // Ouvir atualizações de progresso via Socket.IO
 socket.on('progress', (data) => {
   if (!testRunning) return;
   
-  const { progress, remainingTime, currentWord: currentTryingWord } = data;
+  const { progress, remainingTime, currentWord: currentTryingWord, threadCount: currentThreadCount } = data;
   
   // Verificar se o progresso já está em 100%
   if (parseInt(progressBar.getAttribute('aria-valuenow')) >= 100) return;
@@ -142,6 +145,11 @@ socket.on('progress', (data) => {
   // Atualizar a palavra atual
   if (currentTryingWord) {
     currentWord.innerHTML = `<i class="fas fa-key me-1"></i>Palavra atual: <span class="badge bg-primary">${currentTryingWord}</span>`;
+  }
+  
+  // Atualizar o número de threads
+  if (currentThreadCount) {
+    threadCount.innerHTML = `<i class="fas fa-microchip me-1"></i>Threads em uso: <span class="badge bg-primary">${currentThreadCount}</span>`;
   }
   
   // Se o progresso chegar a 100%, finalizar a barra

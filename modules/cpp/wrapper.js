@@ -74,9 +74,11 @@ function crackZip(zipFilePath, wordListPath, progressCallback = null) {
           const remainingTime = parseFloat(timeMatch[1]);
           const currentWord = wordMatch[1].trim();
           
-          // Sempre atualizar, sem filtro de diferença mínima
-          progressCallback(progress.toFixed(2), remainingTime.toFixed(0), currentWord);
-          lastProgress = progress;
+          // Apenas atualizar se o progresso mudou significativamente (evitar muitas atualizações)
+          if (Math.abs(progress - lastProgress) >= 0.5) {
+            progressCallback(progress.toFixed(2), remainingTime.toFixed(0), currentWord, 4); // C++ normalmente usa 4 threads
+            lastProgress = progress;
+          }
         }
       }
     });
@@ -104,7 +106,7 @@ function crackZip(zipFilePath, wordListPath, progressCallback = null) {
         
         // Enviar progresso final
         if (typeof progressCallback === 'function') {
-          progressCallback(100, 0, null);
+          progressCallback(100, 0, null, null);
         }
         
         resolve(result);

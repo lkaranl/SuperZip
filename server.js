@@ -85,9 +85,9 @@ app.post('/upload', upload.fields([
     const wordListOriginal = req.files.wordList[0].originalname;
 
     // Registrar eventos de progresso
-    const progressHandler = (progress, remainingTime, currentWord) => {
+    const progressHandler = (progress, remainingTime, currentWord, threadCount) => {
       if (socket) {
-        socket.emit('progress', { progress, remainingTime, currentWord });
+        socket.emit('progress', { progress, remainingTime, currentWord, threadCount });
       }
     };
 

@@ -52,15 +52,17 @@ function crackZip(zipFilePath, wordListPath, progressCallback = null) {
         // Extrair informações de progresso
         const progressMatch = line.match(/Progresso: ([\d.]+)%/);
         const timeMatch = line.match(/Tempo restante: ([\d.]+)s/);
+        const threadsMatch = line.match(/Threads: (\d+)/);
         const wordMatch = line.match(/Tentando: (.+)$/);
         
         if (progressMatch && timeMatch && wordMatch) {
           const progress = parseFloat(progressMatch[1]);
           const remainingTime = parseFloat(timeMatch[1]);
           const currentWord = wordMatch[1].trim();
+          const threadCount = threadsMatch ? parseInt(threadsMatch[1]) : 1;
           
           // Sempre atualizar
-          progressCallback(progress.toFixed(2), remainingTime.toFixed(0), currentWord);
+          progressCallback(progress.toFixed(2), remainingTime.toFixed(0), currentWord, threadCount);
           lastProgress = progress;
         }
       }
@@ -89,7 +91,7 @@ function crackZip(zipFilePath, wordListPath, progressCallback = null) {
         
         // Enviar progresso final
         if (typeof progressCallback === 'function') {
-          progressCallback(100, 0, null);
+          progressCallback(100, 0, null, null);
         }
         
         resolve(result);
